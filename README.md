@@ -23,6 +23,7 @@ Unlike existing Gmail MCP servers, this implementation offers:
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Google Cloud Setup](#google-cloud-setup)
+- [Permissions & Scopes](#permissions--scopes)
 - [Configuration](#configuration)
 - [Railway / SSE Deployment](#railway--sse-deployment)
 - [OAuth Onboarding](#oauth-onboarding)
@@ -111,11 +112,23 @@ Before using this MCP server, you need to set up a Google Cloud project:
 ### 4. OAuth Consent Screen Setup
 
 1. Go to **APIs & Services** > **OAuth consent screen**
-2. Add the following scopes:
-   - `https://www.googleapis.com/auth/gmail.modify`
-   - `https://www.googleapis.com/auth/gmail.send`
-   - `https://www.googleapis.com/auth/userinfo.email`
+2. Add the following scopes (these are exactly what the server requests — see [Permissions & Scopes](#permissions--scopes)):
+   - `https://mail.google.com/`
+   - `https://www.googleapis.com/auth/gmail.settings.basic`
 3. Add your Gmail address(es) as test users
+
+## Permissions & Scopes
+
+This fork requests **Gmail scopes only**. The upstream project additionally requested full Google Drive, Sheets, Docs, and Calendar access; those scopes and their tools have been removed here so the issued OAuth token cannot reach those APIs.
+
+The scopes actually requested at authorisation are:
+
+| Scope | Grants |
+| --- | --- |
+| `https://mail.google.com/` | Full Gmail mailbox access — read, search, send, modify labels, trash, and permanent delete. This is a broad scope; it is used so every Gmail tool (including draft and label deletion) works without re-consenting. |
+| `https://www.googleapis.com/auth/gmail.settings.basic` | Manage basic Gmail settings — used by `block_sender`, `list_blocked_senders`, and `unblock_sender` to create and read mail filters. |
+
+No Drive, Sheets, Docs, or Calendar scopes are requested. You can verify the exact list in [`src/gmail-client.ts`](src/gmail-client.ts) (`GOOGLE_ACCOUNT_SCOPES`) and in the test [`test/oauth-scopes.test.mjs`](test/oauth-scopes.test.mjs).
 
 ## Configuration
 
@@ -514,9 +527,8 @@ The OAuth token doesn't have the required scopes.
 1. Check your Google Cloud OAuth consent screen has all required scopes
 2. Re-run the OAuth flow to grant new permissions
 3. Required scopes:
-   - `https://www.googleapis.com/auth/gmail.modify`
-   - `https://www.googleapis.com/auth/gmail.send`
-   - `https://www.googleapis.com/auth/userinfo.email`
+   - `https://mail.google.com/`
+   - `https://www.googleapis.com/auth/gmail.settings.basic`
 
 ### Account Not Found
 
