@@ -58,7 +58,9 @@ test('getSaveDir respects MCP_ATTACHMENTS_DIR override', () => {
   const before = process.env.MCP_ATTACHMENTS_DIR;
   process.env.MCP_ATTACHMENTS_DIR = '/tmp/mcp-attach-override';
   try {
-    assert.equal(getSaveDir(), '/tmp/mcp-attach-override');
+    // getSaveDir resolves the override to an absolute path, so compare against
+    // the same resolution to stay correct on both POSIX and Windows.
+    assert.equal(getSaveDir(), path.resolve('/tmp/mcp-attach-override'));
   } finally {
     if (before === undefined) delete process.env.MCP_ATTACHMENTS_DIR;
     else process.env.MCP_ATTACHMENTS_DIR = before;

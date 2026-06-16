@@ -1,5 +1,6 @@
 node_modules/
-# dist/ intentionally shipped for zero-build deploys
+# dist/ is a build artefact — build from source, never commit it
+dist/
 *.log
 .DS_Store
 .env

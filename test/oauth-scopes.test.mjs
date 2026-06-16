@@ -10,15 +10,20 @@ const sampleCredentials = {
   },
 };
 
-test('begin auth requests Drive, Sheets, Docs, and Calendar scopes alongside Gmail', () => {
+test('begin auth requests Gmail scopes only (no Drive, Sheets, Docs, or Calendar)', () => {
   const { authUrl } = generateAuthUrlFromCredentials(sampleCredentials);
   const url = new URL(authUrl);
   const scopes = url.searchParams.get('scope') ?? '';
 
+  // Gmail scopes we keep.
   assert.match(scopes, /https:\/\/mail\.google\.com\//);
-  assert.match(scopes, /https:\/\/www\.googleapis\.com\/auth\/drive(?:\s|$)/);
-  assert.match(scopes, /https:\/\/www\.googleapis\.com\/auth\/spreadsheets/);
-  assert.match(scopes, /https:\/\/www\.googleapis\.com\/auth\/documents/);
-  assert.match(scopes, /https:\/\/www\.googleapis\.com\/auth\/calendar/);
+  assert.match(scopes, /https:\/\/www\.googleapis\.com\/auth\/gmail\.settings\.basic/);
+
+  // Scopes removed in this fork must never be requested.
+  assert.doesNotMatch(scopes, /https:\/\/www\.googleapis\.com\/auth\/drive/);
+  assert.doesNotMatch(scopes, /https:\/\/www\.googleapis\.com\/auth\/spreadsheets/);
+  assert.doesNotMatch(scopes, /https:\/\/www\.googleapis\.com\/auth\/documents/);
+  assert.doesNotMatch(scopes, /https:\/\/www\.googleapis\.com\/auth\/calendar/);
+
   assert.notEqual(url.searchParams.get('include_granted_scopes'), 'true');
 });
