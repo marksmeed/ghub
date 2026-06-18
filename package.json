@@ -13,7 +13,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run build && node --test test/*.test.mjs",
-    "postinstall": "bash scripts/build-ocr.sh"
+    "postinstall": "node scripts/build-ocr.mjs"
   },
   "keywords": [
     "mcp",
