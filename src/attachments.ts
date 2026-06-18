@@ -25,7 +25,7 @@ export interface AttachmentMetadata {
 export type ExtractionMethod =
   | 'pdf-parse'
   | 'mammoth'
-  | 'xlsx'
+  | 'exceljs'
   | 'officeparser'
   | 'utf8'
   | 'ocr-vision'
@@ -170,25 +170,48 @@ async function extractDocx(savedPath: string): Promise<ExtractionResult> {
   }
 }
 
+// CSV-escape a cell value: quote it when it contains a comma, quote, or newline,
+// doubling any embedded quotes (RFC 4180).
+function escapeCsvValue(value: string): string {
+  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
 async function extractXlsx(savedPath: string): Promise<ExtractionResult> {
   try {
-    const XLSX = await import('xlsx');
+    // ExcelJS only writes the first worksheet to CSV natively, so build the CSV
+    // for every sheet by hand from each cell's display text.
+    // ExcelJS is CommonJS; under ESM its Workbook lives on the default export.
+    const { default: ExcelJS } = await import('exceljs');
     const buf = await fs.readFile(savedPath);
-    const workbook = XLSX.read(buf, { type: 'buffer' });
-    const sheets = workbook.SheetNames.map((name) => {
-      const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[name]);
-      return `=== ${name} ===\n${csv}`;
+    const workbook = new ExcelJS.Workbook();
+    // ExcelJS ships its own global `Buffer` type that is incompatible with
+    // Node's; cast to exactly the type load() expects. The value is a real
+    // Node Buffer at runtime.
+    await workbook.xlsx.load(buf as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+
+    const sheets: string[] = [];
+    workbook.eachSheet((worksheet) => {
+      const rows: string[] = [];
+      worksheet.eachRow({ includeEmpty: true }, (row) => {
+        const cells: string[] = [];
+        for (let col = 1; col <= worksheet.columnCount; col += 1) {
+          cells.push(escapeCsvValue(row.getCell(col).text ?? ''));
+        }
+        rows.push(cells.join(','));
+      });
+      sheets.push(`=== ${worksheet.name} ===\n${rows.join('\n')}`);
     });
+
     const trimmed = truncate(sheets.join('\n\n'));
     return {
       text: trimmed.text,
-      extractionMethod: 'xlsx',
+      extractionMethod: 'exceljs',
       textTruncated: trimmed.textTruncated,
     };
   } catch (err) {
     return {
       text: null,
-      extractionMethod: 'xlsx',
+      extractionMethod: 'exceljs',
       extractionError: `XLSX parse failed: ${(err as Error).message}`,
     };
   }
@@ -196,9 +219,11 @@ async function extractXlsx(savedPath: string): Promise<ExtractionResult> {
 
 async function extractPptx(savedPath: string): Promise<ExtractionResult> {
   try {
-    const { parseOfficeAsync } = await import('officeparser');
-    const text = await parseOfficeAsync(savedPath);
-    const trimmed = truncate(text ?? '');
+    // officeparser 7 returns an AST from parseOffice; convert() yields plain
+    // text directly, inferring the file type from the path extension.
+    const { convert } = await import('officeparser');
+    const { value } = await convert(savedPath, 'text');
+    const trimmed = truncate(typeof value === 'string' ? value : '');
     return {
       text: trimmed.text,
       extractionMethod: 'officeparser',
