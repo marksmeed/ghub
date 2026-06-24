@@ -264,7 +264,7 @@ async function extractImageOcr(savedPath: string): Promise<ExtractionResult> {
       text: null,
       extractionMethod: 'none',
       extractionError:
-        'OCR binary unavailable — run scripts/build-ocr.sh (requires swiftc on macOS).',
+        'OCR binary unavailable — built by scripts/build-ocr.mjs on macOS only (requires swiftc).',
     };
   }
   try {

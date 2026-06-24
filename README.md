@@ -22,6 +22,7 @@ Unlike existing Gmail MCP servers, this implementation offers:
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
+- [Windows notes](#windows-notes)
 - [Google Cloud Setup](#google-cloud-setup)
 - [Permissions & Scopes](#permissions--scopes)
 - [Configuration](#configuration)
@@ -79,6 +80,37 @@ npm install
 # Build the TypeScript code
 npm run build
 ```
+
+## Windows notes
+
+The server runs fine on Windows; two environment quirks are worth knowing.
+
+### PowerShell execution policy blocks `npm`
+
+On a default Windows PowerShell, `npm` resolves to `npm.ps1`, and the default
+execution policy (`Restricted`) refuses to run `.ps1` scripts — so `npm`,
+`npm run build`, etc. fail with *"running scripts is disabled on this system"*,
+which can look as though Node is not installed. Node is on your `PATH`; it is
+the policy that blocks the shim. Pick whichever fix you prefer:
+
+- **Allow local scripts (recommended, one-off):**
+  ```powershell
+  Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+  ```
+  `RemoteSigned` runs your own local scripts while still requiring a signature
+  on downloaded ones. After this, plain `npm` works.
+- **Or call the `.cmd` shim** (no policy change): `npm.cmd install`,
+  `npm.cmd run build`.
+- **Or use cmd.exe or Git Bash**, where `npm` works as-is.
+
+### OCR is macOS-only
+
+The optional OCR helper for image attachments is a Swift binary that uses
+Apple's Vision framework, built at install time by `scripts/build-ocr.mjs`. On
+Windows (and Linux) the build is skipped automatically and `npm install` still
+succeeds — image attachments are saved to disk but their text is not extracted.
+All other extraction (PDF, DOCX, XLSX, PPTX, plain text) works on every
+platform.
 
 ## Google Cloud Setup
 
