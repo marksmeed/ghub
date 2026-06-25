@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+// Must be first: keeps stdout clean for the MCP stdio JSON-RPC protocol.
+import './stdio-guard.js';
 import { promises as fs } from 'node:fs';
 import express, { type Request, type Response } from 'express';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
