@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Local connector dashboard for gmail-multi-mcp (plus other connectors).
+// Local account dashboard for gmail-multi-mcp.
 //
 // Serves a small web GUI on http://127.0.0.1:8737 showing a tile per
-// connector account with live health, and offers:
+// account with live health, and offers:
 //   - one-click "Re-authorise" via a loopback OAuth redirect (Desktop-app
 //     clients accept any http://localhost:<port> redirect, nothing needs to
 //     be registered in Google Cloud)
@@ -10,7 +10,6 @@
 //     paste new credentials JSON), flowing straight into Google sign-in
 //   - deleting an account (revokes the grant at Google best-effort; the
 //     account folder is kept as a timestamped backup, not hard-deleted)
-//   - an UptimeRobot tile (static API key — health check only)
 //
 // Usage:  node scripts/reauth-gui.mjs   (or: npm run reauth)
 // Env:    GHUB_REAUTH_PORT to override the port.
@@ -185,41 +184,6 @@ async function revokeToken(account) {
   }
 }
 
-// Read-only health check for the UptimeRobot hosted MCP: validates the main
-// API key (a static key — nothing to re-authorise, rotate it at uptimerobot.com).
-async function checkUptimeRobot() {
-  const apiKey = process.env.UPTIMEROBOT_API_KEY;
-  if (!apiKey) {
-    return { state: 'unauthorised', detail: 'UPTIMEROBOT_API_KEY env var is not set.' };
-  }
-  try {
-    const response = await fetch('https://api.uptimerobot.com/v2/getAccountDetails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ api_key: apiKey, format: 'json' }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const body = await response.json();
-    if (body.stat === 'ok') {
-      const account = body.account ?? {};
-      const monitors =
-        account.total_monitors_count ??
-        (account.up_monitors ?? 0) + (account.down_monitors ?? 0) + (account.paused_monitors ?? 0);
-      return {
-        state: 'ok',
-        email: account.email,
-        detail: `API key valid — ${monitors} monitors.`,
-      };
-    }
-    return {
-      state: 'expired',
-      detail: `Key rejected: ${body.error?.message ?? JSON.stringify(body.error ?? body)}`,
-    };
-  } catch (error) {
-    return { state: 'unknown', detail: `Could not reach UptimeRobot: ${error.message}` };
-  }
-}
-
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -318,10 +282,7 @@ function tile({ icon, name, kind, email, status, tags = [], actions = '' }) {
 
 async function dashboard(query) {
   const config = await loadConfig();
-  const [statuses, uptimeRobot] = await Promise.all([
-    Promise.all(config.accounts.map((account) => checkAccount(account))),
-    checkUptimeRobot(),
-  ]);
+  const statuses = await Promise.all(config.accounts.map((account) => checkAccount(account)));
 
   let flash = '';
   if (query.get('ok')) {
@@ -350,18 +311,6 @@ async function dashboard(query) {
           <button class="btn ghost" type="submit" title="Delete account">🗑</button>
         </form>`,
     });
-  });
-
-  const uptimeRobotTile = tile({
-    icon: '📡',
-    name: 'UptimeRobot',
-    kind: 'Monitoring · API key',
-    email: uptimeRobot.email ?? 'hosted MCP',
-    status:
-      uptimeRobot.state === 'expired'
-        ? { ...uptimeRobot, state: 'expired', detail: uptimeRobot.detail }
-        : uptimeRobot,
-    actions: `<a class="btn secondary" href="https://dashboard.uptimerobot.com/integrations" target="_blank" rel="noopener">Manage key</a>`,
   });
 
   const addTile = `<div class="tile add" onclick="document.getElementById('addModal').showModal()"
@@ -423,22 +372,17 @@ async function dashboard(query) {
     ${anyGmailProblem ? `<br>💡 If Gmail tokens keep expiring every ~7 days, the Google Cloud OAuth consent
     screen is in <b>Testing</b> mode — set it to <b>In production</b> (APIs &amp; Services → OAuth
     consent screen) and refresh tokens stop expiring.` : ''}
-    <br>📡 The UptimeRobot key is static and never expires on its own. If it shows invalid,
-    regenerate it at uptimerobot.com, then run
-    <code>[Environment]::SetEnvironmentVariable('UPTIMEROBOT_API_KEY','&lt;new key&gt;','User')</code>
-    and restart Claude (and this dashboard).
   </p>`;
 
   return page(
-    'Connector dashboard',
+    'Gmail account dashboard',
     `<header class="top">
-       <h1>Connectors</h1>
+       <h1>Gmail accounts</h1>
        <span class="sub">${escapeHtml(CONFIG_ROOT)} · live status</span>
      </header>
      ${flash}
      <div class="grid">
        ${gmailTiles.join('\n')}
-       ${uptimeRobotTile}
        ${addTile}
      </div>
      ${notes}
@@ -596,7 +540,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, '127.0.0.1', () => {
   const address = `http://127.0.0.1:${PORT}/`;
-  console.log(`Connector dashboard: ${address}`);
+  console.log(`Gmail account dashboard: ${address}`);
   // Best-effort: open the default browser (Windows / macOS / Linux).
   const opener =
     process.platform === 'win32'
