@@ -254,7 +254,16 @@ function isGenericSubject(subject: string): boolean {
   return GENERIC_SUBJECTS.has(normalized);
 }
 
-function formatEmailItem(email: ParsedEmail, includeBody: boolean): string {
+// Per-message body caps. List tools (read_emails) show a preview and point to
+// get_email_thread; the thread tool shows the full body up to a safety ceiling.
+const LIST_BODY_PREVIEW_LIMIT = 2_000;
+const THREAD_BODY_LIMIT = 100_000;
+
+function formatEmailItem(
+  email: ParsedEmail,
+  includeBody: boolean,
+  bodyLimit: number = LIST_BODY_PREVIEW_LIMIT,
+): string {
   const lines = [
     `**Account**: ${email.accountId} (${email.accountEmail})`,
     `**From**: ${email.from || '(unknown)'}`,
@@ -272,8 +281,17 @@ function formatEmailItem(email: ParsedEmail, includeBody: boolean): string {
   if (includeBody) {
     const body = (email.body || '').trim();
     if (body) {
-      const trimmed = body.length > 600 ? `${body.slice(0, 600)}...` : body;
-      lines.push(`**Body**:\n${trimmed}`);
+      if (body.length > bodyLimit) {
+        const hint =
+          bodyLimit < THREAD_BODY_LIMIT
+            ? ` — call get_email_thread with account="${email.accountId}" thread_id="${email.threadId}" for the full text`
+            : '';
+        lines.push(
+          `**Body** (truncated: showing ${bodyLimit} of ${body.length} characters${hint}):\n${body.slice(0, bodyLimit)}`,
+        );
+      } else {
+        lines.push(`**Body**:\n${body}`);
+      }
     }
   }
 
@@ -1198,7 +1216,7 @@ class GmailMultiInboxServer {
 
     thread.messages.forEach((message, index) => {
       lines.push(`## ${index + 1}. ${message.subject}`);
-      lines.push(formatEmailItem(message, true));
+      lines.push(formatEmailItem(message, true, THREAD_BODY_LIMIT));
       lines.push('');
     });
 

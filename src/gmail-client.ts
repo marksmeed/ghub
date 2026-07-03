@@ -187,8 +187,37 @@ function findAttachmentPartByFilename(
   return null;
 }
 
-function stripHtmlTags(input: string): string {
-  return input.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+function decodeHtmlEntities(input: string): string {
+  return input
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+      const code = Number.parseInt(hex, 16);
+      return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : '';
+    })
+    .replace(/&#(\d+);/g, (_, dec) => {
+      const code = Number.parseInt(dec, 10);
+      return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : '';
+    })
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&amp;/gi, '&');
+}
+
+export function stripHtmlTags(input: string): string {
+  return decodeHtmlEntities(
+    input
+      .replace(/<(style|script|head|title)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|tr|li|h[1-6]|blockquote|pre|table)\s*>/gi, '\n')
+      .replace(/<[^>]+>/g, ' '),
+  )
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ ?\n ?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function getHeaderValue(
@@ -200,19 +229,23 @@ function getHeaderValue(
   return found?.value?.trim() ?? '';
 }
 
-function extractEmailBody(payload?: gmail_v1.Schema$MessagePart): string {
+export function extractEmailBody(payload?: gmail_v1.Schema$MessagePart): string {
   if (!payload) return '';
 
   if (payload.body?.data && !payload.parts?.length) {
-    return decodeBase64Url(payload.body.data);
+    const decoded = decodeBase64Url(payload.body.data);
+    return payload.mimeType === 'text/html' ? stripHtmlTags(decoded) : decoded;
   }
 
   if (!payload.parts || payload.parts.length === 0) {
     return '';
   }
 
-  let textPlain = '';
-  let textHtml = '';
+  // Collect every text part in document order (depth-first). Messages with
+  // inline images (e.g. Apple Mail) split the body into multiple text parts
+  // around each image — keeping only the first one drops the rest of the body.
+  const textPlainParts: string[] = [];
+  const textHtmlParts: string[] = [];
 
   const stack = [...payload.parts];
   while (stack.length > 0) {
@@ -220,20 +253,22 @@ function extractEmailBody(payload?: gmail_v1.Schema$MessagePart): string {
     if (!part) continue;
 
     if (part.parts?.length) {
-      stack.push(...part.parts);
+      stack.unshift(...part.parts);
     }
 
-    if (!part.body?.data) continue;
+    // Parts with a filename are attachments (e.g. a .txt file), not body text —
+    // they are surfaced separately via attachment metadata.
+    if (!part.body?.data || part.filename) continue;
 
-    if (part.mimeType === 'text/plain' && !textPlain) {
-      textPlain = decodeBase64Url(part.body.data);
-    } else if (part.mimeType === 'text/html' && !textHtml) {
-      textHtml = decodeBase64Url(part.body.data);
+    if (part.mimeType === 'text/plain') {
+      textPlainParts.push(decodeBase64Url(part.body.data));
+    } else if (part.mimeType === 'text/html') {
+      textHtmlParts.push(decodeBase64Url(part.body.data));
     }
   }
 
-  if (textPlain) return textPlain;
-  if (textHtml) return stripHtmlTags(textHtml);
+  if (textPlainParts.length > 0) return textPlainParts.join('\n');
+  if (textHtmlParts.length > 0) return stripHtmlTags(textHtmlParts.join('\n'));
 
   return '';
 }
