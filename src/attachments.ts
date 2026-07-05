@@ -74,8 +74,15 @@ export function sanitizeFilename(raw: string): string {
   const cleaned = withoutTraversal
     .replace(/[\x00-\x1f\x7f]/g, '')
     .replace(/[\/\\]/g, '_')
+    // Characters Windows forbids in filenames (: * ? " < > |). Left in place
+    // they make fs.writeFile fail with ENOENT on Windows — e.g. an attachment
+    // literally named "PCC 1:5:26.pdf" cannot be written. Map them to '_'.
+    .replace(/[:*?"<>|]/g, '_')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    // Windows silently strips trailing dots and spaces from names, which would
+    // otherwise desync the path we return from the file actually created.
+    .replace(/[. ]+$/, '');
 
   if (!cleaned) return 'attachment';
   if (cleaned.length <= MAX_FILENAME_LENGTH) return cleaned;

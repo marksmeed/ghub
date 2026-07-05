@@ -40,6 +40,22 @@ test('sanitizeFilename passes through normal filenames', () => {
   assert.equal(sanitizeFilename('invoice-123.xlsx'), 'invoice-123.xlsx');
 });
 
+test('sanitizeFilename replaces Windows-reserved characters', () => {
+  // Colons make fs.writeFile fail with ENOENT on Windows.
+  assert.equal(sanitizeFilename('PCC 1:5:26.pdf'), 'PCC 1_5_26.pdf');
+  const result = sanitizeFilename('a:b*c?d"e<f>g|h.txt');
+  for (const ch of [':', '*', '?', '"', '<', '>', '|']) {
+    assert.ok(!result.includes(ch), `reserved char ${ch} removed`);
+  }
+  assert.ok(result.endsWith('.txt'), 'extension preserved');
+});
+
+test('sanitizeFilename strips trailing dots and spaces', () => {
+  // Windows silently drops trailing dots/spaces, desyncing the returned path.
+  assert.equal(sanitizeFilename('report.  '), 'report');
+  assert.equal(sanitizeFilename('name...'), 'name');
+});
+
 test('buildSavePath includes date and stable short id', () => {
   const p = buildSavePath('attach-xyz-9988', 'report.pdf');
   const base = path.basename(p);
