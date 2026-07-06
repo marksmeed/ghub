@@ -461,13 +461,18 @@ Send an email from a specific account.
   - `path` (required): Absolute or local filesystem path
   - `filename` (optional): Override the filename shown in Gmail
   - `content_type` (optional): Override the MIME type, for example `application/pdf`
+- `thread_id` (optional): Gmail thread ID. When set, the message is sent as a reply within that thread instead of starting a new one
+- `in_reply_to` (optional): RFC 2822 `Message-ID` of the email being replied to. Sets the `In-Reply-To` header for proper threading
+- `references` (optional): RFC 2822 `References` header value for threading
+
+To reply within an existing conversation, pass the `thread_id` and `in_reply_to` (the original message's `Message-ID`) returned by `read_emails` / `search_emails`.
 
 **Returns:** Sent message details
 
 #### `create_draft`
 Create a draft email.
 
-**Parameters:** Same as `send_email`
+**Parameters:** Same as `send_email` (including `thread_id`, `in_reply_to`, and `references` for threading)
 
 **Returns:** Draft details including `draft_id` and `thread_id`
 

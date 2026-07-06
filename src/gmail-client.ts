@@ -1129,12 +1129,18 @@ export class GmailAccountClient {
     bcc?: string;
     html?: boolean;
     attachments?: EmailAttachment[];
+    threadId?: string;
+    inReplyTo?: string;
+    references?: string;
   }): Promise<{ messageId: string; threadId?: string }> {
     const raw = await createRawEmailMessage(input);
 
+    const requestBody: { raw: string; threadId?: string } = { raw };
+    if (input.threadId) requestBody.threadId = input.threadId;
+
     const response = await this.gmail.users.messages.send({
       userId: 'me',
-      requestBody: { raw },
+      requestBody,
     });
 
     return {

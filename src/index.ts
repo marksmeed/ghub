@@ -97,6 +97,9 @@ interface OutgoingEmailArgs {
   bcc?: string;
   html?: boolean;
   attachments?: OutgoingEmailAttachmentArgs[];
+  thread_id?: string;
+  in_reply_to?: string;
+  references?: string;
 }
 
 interface OutgoingEmailAttachmentArgs {
@@ -841,7 +844,8 @@ class GmailMultiInboxServer {
         },
         {
           name: 'send_email',
-          description: 'Send an email from one account (account required).',
+          description:
+            'Send an email from one account (account required). To reply within an existing thread, set thread_id (from read_emails/search_emails) and in_reply_to (the original message\'s RFC 2822 Message-ID) so the reply threads instead of starting a new conversation.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -875,6 +879,18 @@ class GmailMultiInboxServer {
                   required: ['path'],
                   additionalProperties: false,
                 },
+              },
+              thread_id: {
+                type: 'string',
+                description: 'Optional Gmail thread ID. When set, the message is sent as a reply within that thread.',
+              },
+              in_reply_to: {
+                type: 'string',
+                description: 'Optional RFC 2822 Message-ID of the email being replied to. Sets the In-Reply-To header for proper threading.',
+              },
+              references: {
+                type: 'string',
+                description: 'Optional RFC 2822 References header value for threading.',
               },
             },
             required: ['account', 'to', 'subject', 'body'],
@@ -1818,6 +1834,9 @@ class GmailMultiInboxServer {
       bcc: valueToString(rawArgs.bcc, '') || undefined,
       html: valueToBoolean(rawArgs.html, false),
       attachments: valueToAttachmentArray(rawArgs.attachments),
+      thread_id: valueToString(rawArgs.thread_id, '') || undefined,
+      in_reply_to: valueToString(rawArgs.in_reply_to, '') || undefined,
+      references: valueToString(rawArgs.references, '') || undefined,
     };
 
     const config = await this.loadConfig();
@@ -1836,6 +1855,9 @@ class GmailMultiInboxServer {
         filename: attachment.filename,
         contentType: attachment.content_type,
       })),
+      threadId: args.thread_id,
+      inReplyTo: args.in_reply_to,
+      references: args.references,
     });
 
     return textResult(
