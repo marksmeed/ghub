@@ -354,6 +354,11 @@ async function buildRawEmailMessage(input: {
 
   const attachments = (input.attachments ?? []).filter((attachment) => attachment.path.trim() !== '');
 
+  // RFC 5322 requires CRLF line endings. Without this, bare LFs inside the
+  // body end up mixed with the CRLF-joined headers/lines below, and Gmail's
+  // renderer treats every bare-LF line break as its own paragraph block.
+  const body = input.body.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+
   if (attachments.length === 0) {
     const lines: string[] = [
       `To: ${to}`,
@@ -371,7 +376,7 @@ async function buildRawEmailMessage(input: {
     if (input.inReplyTo) lines.push(`In-Reply-To: ${input.inReplyTo}`);
     if (input.references) lines.push(`References: ${input.references}`);
 
-    lines.push('', input.body);
+    lines.push('', body);
     return encodeBase64Url(lines.join('\r\n'));
   }
 
@@ -397,7 +402,7 @@ async function buildRawEmailMessage(input: {
     `Content-Type: text/${input.html ? 'html' : 'plain'}; charset=utf-8`,
     'Content-Transfer-Encoding: base64',
     '',
-    wrapBase64(Buffer.from(input.body, 'utf8').toString('base64'))
+    wrapBase64(Buffer.from(body, 'utf8').toString('base64'))
   );
 
   for (const attachment of attachments) {
